@@ -7,6 +7,8 @@ global_imports <- function() {
    require("tweedie")
    require("rlang")
    require("olsrr")
+   require("glmnet")
+   require("xgboost")
 }
 global_imports()
 
@@ -14,7 +16,7 @@ global_imports()
 # Loading the data =============================================================
 rm(list = ls())
 
-setwd("C:/Users/alexl/Google Drive/Insurance_Market_Simulation")
+setwd("C:/Users/alexl/Google Drive/Pricing_games_2020-2021")
 train_data = read.csv("training.csv")
 Xdata = within(train_data, rm('claim_amount'))
 ydata = train_data['claim_amount']
@@ -146,6 +148,23 @@ fit_model <- function (x_raw, y_raw){
       select(-c(id_policy, year, pol_pay_freq))
    
    
+   multicol_diagnosis <- function(model, TOL=0.5) {
+      #' Fonction that aim the problematic variables
+      #' @param model A linear model;
+      #' @param TOL Threshold to remove a variable from model;
+      multicol_diagnosis <- ols_eigen_cindex(model)
+      eigen_index <- rownames(multicol_diagnosis)
+      multicol_diagnosis <- 
+         multicol_diagnosis %>%  
+         mutate(j = eigen_index, .after=1) %>%
+         select(-Eigenvalue, -intercept) %>%
+         top_n(2, `Condition Index`) %>%
+         pivot_longer(-c(1,2), values_to='p_lj') %>%
+         filter(p_lj>=TOL)
+      
+      return(multicol_diagnosis)
+   }
+   
    backward_selection <- function(model, TOL=0.05){
       for (i in 1:1000) {
          to_drop <- drop1(model, test='LRT') %>%
@@ -201,7 +220,7 @@ fit_model <- function (x_raw, y_raw){
    }
    
    
-   # Training frequency model (i.e. is a claim will occur) ---------------------
+   # Training occurrence model (i.e. is a claim will occur) ---------------------
    
    (dim_classes <- df_train %>%
       transmute(claim_amount = 1*(claim_amount > 0)) %>% table())
@@ -260,42 +279,72 @@ fit_model <- function (x_raw, y_raw){
       )
       
       # Features selection
-      freq_model_backward <- MASS::stepAIC(
+      occ_model_backward <- MASS::stepAIC(
          complete_model,
          direction = "backward",
          data = df_train_resampled,
          k=3
       )
-      freq_model_backward$anova
-      drop1(freq_model_backward, test="LRT")
+      occ_model_backward$anova
+      drop1(occ_model_backward, test="LRT")
       
       # Adding interactions
-      freq_model <- freq_model_backward %>%
+      occ_model <- occ_model_backward %>%
          interaction_selection(TOL=c(0.1, 0.05), AIC_K=log(n_observations))
       
+      summary(occ_model)
+      occ_model <- occ_model %>% update(.~. -pol_usage:vh_fuel)
+      car::vif(occ_model)
+      #' Too much interactions have been added. There's now a problem of 
+      #' multicolinearity
+      fake_mod <- lm(occ_model$formula, data = df_train_resampled)
+      multicol_diagnosis(fake_mod, TOL = 0.5)
+      occ_model <- occ_model %>% update(.~. -pol_coverage:pol_usage)
+      car::vif(occ_model)
+      
+      fake_mod <- fake_mod %>% update(.~. -pol_coverage:pol_usage)
+      multicol_diagnosis(fake_mod, TOL = 0.5)
+      occ_model <- occ_model %>% update(.~. -pol_duration:pol_usage)
+      car::vif(occ_model)
+      
+      fake_mod <- fake_mod %>% update(.~. -pol_duration:pol_usage)
+      multicol_diagnosis(fake_mod, TOL = 0.5)
+      occ_model <- occ_model %>% update(.~. -pol_usage:vh_weight)
+      car::vif(occ_model)
+      # There's no more problem
+      
+      # Adding vh_make_model
+      AIC(occ_model,
+          occ_model %>% update(. ~ . + vh_make_model),
+          k = log(n_observations))
+      #' vh_make_model doesn't contribute to improve the model.
+      
+      # Final model
+      occ_model %>% anova()
+      occ_model %>% summary()
+      
       } else {
-         freq_mod_formula <- formula(
-            "I(claim_amount > 0) ~ pol_no_claims_discount + pol_coverage +
-            pol_duration + pol_sit_duration + pol_payd + pol_usage +
-            drv_sex1 + drv_age1 + drv_age_lic1 + drv_age2 + drv_age_lic2 +
-            vh_age + vh_fuel + vh_speed + vh_value + vh_weight + population +
-            pop_density + young_second_drv + vh_age:vh_fuel +
-            pol_usage:vh_weight + pol_duration:pol_usage + vh_age:vh_speed +
-            pol_coverage:vh_age + pol_no_claims_discount:pop_density +
-            pol_usage:vh_value"
+         occ_mod_formula <- formula(
+         "I(claim_amount > 0) ~ pol_no_claims_discount + 
+      pol_coverage + pol_duration + pol_sit_duration + pol_payd + 
+      pol_usage + drv_age1 + vh_age + vh_fuel + vh_speed + vh_value + 
+      vh_weight + population + town_surface_area + young_second_drv + 
+      vh_age:vh_speed + pol_coverage:vh_age + pol_coverage:pol_duration + 
+      pol_coverage:vh_fuel + pol_coverage:pol_payd"
          )
       
-      freq_model <- glm(
-         freq_mod_formula,
+      occ_model <- glm(
+         occ_mod_formula,
          data = df_train_resampled,
          family = binomial(link = 'logit')
          )
-   }
-   
+      
+      }
+
    # Evaluation of the performances for the occurrence detection.
    if (EVALUATE_MODEL){
       occurence_predictions <- predict(
-         freq_model,
+         occ_model,
          newdata = df_test,
          type = "response"
          )
@@ -329,6 +378,7 @@ fit_model <- function (x_raw, y_raw){
             TOL=c(0.1, 0.05),
             AIC_K=log(nrow(df_severity_train))
             )
+      summary(severity_model)
       
    } else {
       sev_mod_formula <- formula(
@@ -351,10 +401,14 @@ fit_model <- function (x_raw, y_raw){
       U <- ecdf(y_test)(y_test)
       ks.test(U, ptweedie(y_test, xi=xi, mu=mu, phi = phi))
    }
+   
+   #' Since the statistical model trained doesn't perform well, we will try a 
+   #' XGBoost
+   
    # ---------------------------------------------------------------------
    # The result trained_model is something that you will save in the next
    # section defining a list and putting the trained models in there
-   trained_model <- list(occurence = freq_model,
+   trained_model <- list(occurence = occ_model,
                         cost = severity_model)
    return(trained_model)
 }

@@ -269,8 +269,12 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             filter(claim_amount>0)
          
          # Defining task and learner for the mlr optimizer
-         train_task <- makeRegrTask(data = df_train_loss, target = "claim_amount")
-         valid_task <- makeRegrTask(data = df_valid_loss, target = "claim_amount")
+         train_task <- makeRegrTask(
+            data = df_train_loss, 
+            target = "claim_amount")
+         valid_task <- makeRegrTask(
+            data = df_valid_loss, 
+            target = "claim_amount")
          
          learner <- makeLearner("regr.xgboost", predict.type = "response")
          
@@ -289,7 +293,8 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             # Set parameter space for gridsearch
             params <- makeParamSet(
                makeNumericParam("tweedie_variance_power", lower=1, upper=2),
-               makeDiscreteParam("booster", values = c('gbtree', 'gblinear', 'dart')),
+               makeDiscreteParam("booster", values = c(
+                  'gbtree', 'gblinear', 'dart')),
                makeIntegerParam("max_depth", lower = 3L, upper = 6L),
                makeNumericParam("min_child_weight", lower = 1L, upper = 10L),
                makeNumericParam("subsample", lower = 0.5, upper = 1),
@@ -319,24 +324,24 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
          } else {
             # Pretuned parameters :
             # ---------------------
-            #' [Tune] Result: tweedie_variance_power=1.17; booster=gblinear; 
-            #' max_depth=3; min_child_weight=7.01; subsample=0.899;
-            #' colsample_bytree=0.709; lambda=1.19; alpha=0.0496; eta=0.306 :
-            #' @mse.test.mean=3348662.3913178
+            #' [Tune] Result: tweedie_variance_power=1.12; booster=gblinear;
+            #' max_depth=4; min_child_weight=7.1; subsample=0.94;
+            #' colsample_bytree=0.617; lambda=3.11; alpha=0.295; eta=0.314 :
+            #' @mse.test.mean=3348276.3538605
             learner$par.vals <- list(
                objective = "reg:tweedie",
                eval_metric = "rmse",
                nrounds = 500,
-               eta = 0.306,
+               eta = 0.314,
                gamma = 1e-1,
-               tweedie_variance_power=1.17,
+               tweedie_variance_power=1.12,
                booster='gblinear',
-               max_depth=3,
-               min_child_weight=7.01,
-               subsample=0.899,
-               colsample_bytree=0.709,
-               lambda=1.19,
-               alpha=0.0496
+               max_depth=4,
+               min_child_weight=7.1,
+               subsample=0.94,
+               colsample_bytree=0.617,
+               lambda=3.11,
+               alpha=0.295
             )
          }
          
@@ -370,8 +375,8 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             
             # Anderson-Darling test
             goftest::ad.test(truth, null=Fx, estimated=F, nullname = 'Tweedie')
-            #' According to both the K-S and A-D test, the model doesn't fit well
-            #' to the dataset. 
+            #' According to both the K-S and A-D test, the model doesn't fit 
+            #' well to the dataset. 
             return(list("model"=xgb_model, "rmse"=rmse_tweedie))
          }
          return(list("model"=xgb_model))
@@ -403,8 +408,12 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             filter(claim_amount>0)
       
          # Defining task and learner for the mlr optimizer
-         train_task <- makeRegrTask(data = df_train_loss, target = "claim_amount")
-         valid_task <- makeRegrTask(data = df_valid_loss, target = "claim_amount")
+         train_task <- makeRegrTask(
+            data = df_train_loss, 
+            target = "claim_amount")
+         valid_task <- makeRegrTask(
+            data = df_valid_loss, 
+            target = "claim_amount")
          
          learner <- makeLearner("regr.xgboost", predict.type = "response")
          
@@ -422,7 +431,8 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             
             # Set parameter space for gridsearch
             params <- makeParamSet(
-               makeDiscreteParam("booster", values = c('gbtree', 'gblinear', 'dart')),
+               makeDiscreteParam("booster", values = c(
+                  'gbtree', 'gblinear', 'dart')),
                makeIntegerParam("max_depth", lower = 3L, upper = 6L),
                makeNumericParam("min_child_weight", lower = 1L, upper = 10L),
                makeNumericParam("subsample", lower = 0.5, upper = 1),
@@ -544,6 +554,7 @@ load_model <- function(model_path="trained_model.RData"){
 
 
 save_model(trained_models)
+model <- load_model('trained_model.RData')
 
 # Predicting the claims ========================================================
 predict_expected_claim <- function(model, x_raw){
@@ -568,43 +579,50 @@ predict_expected_claim <- function(model, x_raw){
    
    x_clean = preprocess_X_data(x_raw)  # preprocess your data before fitting
    
-   expected_occ <- predict(model$occurence, newdata = x_clean)$data$response
-   expected_loss <- predict(model$cost, newdata = x_clean)$data$response
+   df_occ <- x_clean %>%
+      mutate(occ = claim_amount>0) %>%
+      select(-claim_amount)
+   df_loss <- x_clean %>%
+      filter(claim_amount>0)
+   
+   occ_task <- makeClassifTask(data = df_occ, target = "occ")
+   loss_task <- makeRegrTask(data = df_loss, target = "claim_amount")
+   
+   expected_occ <- predict(model$occurence, newdata = occ_task)$data$response
+   expected_loss <- predict(model$cost, newdata = loss_task)$data$response
    
    expected_claims = expected_occ * expected_loss
    return(expected_claims)  
 }
 
-claims <- predict_expected_claim(model, Xdata)
 
+claims <- predict_expected_claim(model, Xdata)
 
 # Pricing contracts ============================================================
 predict_premium <- function(model, x_raw){
-   # Model prediction function: predicts premiums based on the pricing model.
+   #' Model prediction function: predicts premiums based on the pricing model.
+   #'
+   #' This function outputs the prices that will be offered to the contracts in X_raw.
+   #' premium will typically depend on the average claim predicted in 
+   #' predict_expected_claim, and will add some pricing strategy on top.
+   #'
+   #' This is the function used in the average profit leaderboard. Prices output here will
+   #' be used in competition with other models, so feel free to use a pricing strategy.
+   #'
+   #' Parameters
+   #' ----------
+   #' @X_raw : Dataframe, with the columns described in the data dictionary.
+   #' 	Each row is a different contract. This data has not been processed.
+   #'
+   #' Returns
+   #' -------
+   #' @prices: a one-dimensional array of the same length as X_raw, with one
+   #'     price per contract (in same order). These prices must be POSITIVE (>0).
    
-   # This function outputs the prices that will be offered to the contracts in X_raw.
-   # premium will typically depend on the average claim predicted in 
-   # predict_expected_claim, and will add some pricing strategy on top.
+   expectations <- predict_expected_claim(model, x_raw)
+   x_clean = preprocess_X_data(x_raw)
    
-   # This is the function used in the average profit leaderboard. Prices output here will
-   # be used in competition with other models, so feel free to use a pricing strategy.
-   
-   # Parameters
-   # ----------
-   # X_raw : Dataframe, with the columns described in the data dictionary.
-   # 	Each row is a different contract. This data has not been processed.
-   
-   # Returns
-   # -------
-   # prices: a one-dimensional array of the same length as X_raw, with one
-   #     price per contract (in same order). These prices must be POSITIVE (>0).
-   
-   
-   # YOUR CODE HERE ------------------------------------------------------
-   
-   # x_clean = preprocess_X_data(x_raw)  # preprocess your data before fitting
-   
-   return(predict_expected_claim(model, x_raw) * 2) # Default: bosst prices by a factor of 2
+   return(expectations * 1.2) # Default: bosst prices by a factor of 2
 }
 
 prices <- predict_premium(model, Xdata)

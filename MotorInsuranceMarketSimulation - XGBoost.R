@@ -396,100 +396,95 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
          #' @model trained model
          #' @rmse Calculated rmse on the validation data.
 
-      n_loss_train <- df_train %>% filter(claim_amount > 0) %>% nrow()
-      df_loss <- rbind(df_train, df_valid) %>% filter(claim_amount > 0)
-      claim_vec <- df_loss %>% select(claim_amount)
-      claim_features <- df_loss %>% select(-claim_amount)
-      
-      model_matrix_ <- model.matrix( ~ . + 0, data = claim_features) %>%
-         cbind('claim_amount'=claim_vec)
-      
-      df_train_loss <- model_matrix_[1:n_loss_train, ]
-      df_valid_loss <- model_matrix_[-(1:n_loss_train), ]
-      
-      # Defining task and learner for the mlr optimizer
-      train_task <- makeRegrTask(data = df_train_loss, target = "claim_amount")
-      valid_task <- makeRegrTask(data = df_valid_loss, target = "claim_amount")
-      
-      learner <- makeLearner("regr.xgboost", predict.type = "response")
-      
-      if (gridsearch) {
-         # Set parallel backend
-         parallelStartSocket(cpus = detectCores())
+         df_train_loss <- df_train %>%
+            filter(claim_amount>0)
          
-         # Model fixed parameters
-         learner$par.vals <- list(
-            objective = "reg:squarederror",
-            eval_metric = "rmse",
-            nrounds = 500,
-            gamma = 1e-1
-         )
-         
-         # Set parameter space for gridsearch
-         params <- makeParamSet(
-            makeDiscreteParam("booster", values = c('gbtree', 'gblinear', 'dart')),
-            makeIntegerParam("max_depth", lower = 3L, upper = 6L),
-            makeNumericParam("min_child_weight", lower = 1L, upper = 10L),
-            makeNumericParam("subsample", lower = 0.5, upper = 1),
-            makeNumericParam("colsample_bytree", lower = 0.5, upper = 1),
-            makeNumericParam("lambda", lower=1, upper=4),
-            makeNumericParam("alpha", lower=0, upper=3),
-            makeNumericParam('eta', lower=0.1, upper=0.5)
-         )
-         
-         control <- makeTuneControlRandom(maxit = 10L)
-         resampling <- makeResampleDesc("CV", iters = 5L)
-         
-         # Parameter tuning
-         mytune <- tuneParams(
-            learner = learner,
-            task = train_task,
-            resampling = resampling,
-            par.set = params,
-            control = control,
-            show.info = T
-         )
-         parallelStop()
-         
-         # Set hyperparameters
-         learner <- setHyperPars(learner, par.vals = mytune$x)
-         
-      } else {
-         # Pretuned parameters :
-         # ---------------------
-         #' [Tune] Result: booster=gblinear; max_depth=3; min_child_weight=8.68;
-         #' subsample=0.821; colsample_bytree=0.658; lambda=1.06; alpha=0.997;
-         #' eta=0.184 :
-         #' @mse.test.mean=3347515.9823544
-         learner$par.vals <- list(
-            objective = "reg:squarederror",
-            eval_metric = "rmse",
-            nrounds = 500,
-            eta = 0.306,
-            gamma = 1e-1,
-            tweedie_variance_power=1.17,
-            booster='gblinear',
-            max_depth=3,
-            min_child_weight=8.68,
-            subsample=0.821,
-            colsample_bytree=0.658,
-            lambda=1.19,
-            alpha=0.0496
-         )
-      }
+         df_valid_loss <- df_valid %>%
+            filter(claim_amount>0)
       
-      # Train model
-      xgb_model <- mlr::train(learner = learner, task = train_task)
-      
-      if (evaluate_perf){
-         # Evaluation of performance for the occurrence detection.
-         claim_predictions <- predict(xgb_model, valid_task)
-         #RMSE
-         rmse_lm <- mlr::performance(claim_predictions, mlr::rmse)
-         print(rmse_lm, quote=F)
-         return(list("model"=xgb_model, "rmse"=rmse_lm))
-      }
-      return(list("model"=xgb_model))
+         # Defining task and learner for the mlr optimizer
+         train_task <- makeRegrTask(data = df_train_loss, target = "claim_amount")
+         valid_task <- makeRegrTask(data = df_valid_loss, target = "claim_amount")
+         
+         learner <- makeLearner("regr.xgboost", predict.type = "response")
+         
+         if (gridsearch) {
+            # Set parallel backend
+            parallelStartSocket(cpus = detectCores())
+            
+            # Model fixed parameters
+            learner$par.vals <- list(
+               objective = "reg:squarederror",
+               eval_metric = "rmse",
+               nrounds = 500,
+               gamma = 1e-1
+            )
+            
+            # Set parameter space for gridsearch
+            params <- makeParamSet(
+               makeDiscreteParam("booster", values = c('gbtree', 'gblinear', 'dart')),
+               makeIntegerParam("max_depth", lower = 3L, upper = 6L),
+               makeNumericParam("min_child_weight", lower = 1L, upper = 10L),
+               makeNumericParam("subsample", lower = 0.5, upper = 1),
+               makeNumericParam("colsample_bytree", lower = 0.5, upper = 1),
+               makeNumericParam("lambda", lower=1, upper=4),
+               makeNumericParam("alpha", lower=0, upper=3),
+               makeNumericParam('eta', lower=0.1, upper=0.5)
+            )
+            
+            control <- makeTuneControlRandom(maxit = 10L)
+            resampling <- makeResampleDesc("CV", iters = 5L)
+            
+            # Parameter tuning
+            mytune <- tuneParams(
+               learner = learner,
+               task = train_task,
+               resampling = resampling,
+               par.set = params,
+               control = control,
+               show.info = T
+            )
+            parallelStop()
+            
+            # Set hyperparameters
+            learner <- setHyperPars(learner, par.vals = mytune$x)
+            
+         } else {
+            # Pretuned parameters :
+            # ---------------------
+            #' [Tune] Result: booster=gblinear; max_depth=3; min_child_weight=8.68;
+            #' subsample=0.821; colsample_bytree=0.658; lambda=1.06; alpha=0.997;
+            #' eta=0.184 :
+            #' @mse.test.mean=3347515.9823544
+            learner$par.vals <- list(
+               objective = "reg:squarederror",
+               eval_metric = "rmse",
+               nrounds = 500,
+               eta = 0.306,
+               gamma = 1e-1,
+               tweedie_variance_power=1.17,
+               booster='gblinear',
+               max_depth=3,
+               min_child_weight=8.68,
+               subsample=0.821,
+               colsample_bytree=0.658,
+               lambda=1.19,
+               alpha=0.0496
+            )
+         }
+         
+         # Train model
+         xgb_model <- mlr::train(learner = learner, task = train_task)
+         
+         if (evaluate_perf){
+            # Evaluation of performance for the occurrence detection.
+            claim_predictions <- predict(xgb_model, valid_task)
+            #RMSE
+            rmse_lm <- mlr::performance(claim_predictions, mlr::rmse)
+            print(rmse_lm, quote=F)
+            return(list("model"=xgb_model, "rmse"=rmse_lm))
+         }
+         return(list("model"=xgb_model))
    }
    
    # Comparison of the results for each severity models

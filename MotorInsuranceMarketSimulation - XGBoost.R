@@ -8,6 +8,7 @@ global_imports <- function() {
    require("parallel")
    require("parallelMap")
    require("goftest")
+   require("tweedie")
 }
 global_imports()
 
@@ -25,7 +26,7 @@ summary(train_data)
 
 
 # Define your data preprocessing ===============================================
-preprocess_X_data <- function (x_raw=Xdata){
+preprocess_X_data <- function (x_raw){
    # Data preprocessing function: given X_raw, clean the data for training or 
    # prediction.
    
@@ -93,7 +94,7 @@ preprocess_X_data <- function (x_raw=Xdata){
    x_preprocessed <- model.matrix( ~ . + 0, data = x_preprocessed) %>%
       as.data.frame() %>%
       mutate(vh_value_dummyTRUE = vh_value.dummyTRUE) %>%
-      select(-vh_value.dummyTRUE) %>% 
+      select(-vh_value.dummyTRUE)
       
    
    # ---------------------------------------------------------------------
@@ -102,7 +103,7 @@ preprocess_X_data <- function (x_raw=Xdata){
 
 
 # Define the training logic ====================================================
-fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODEL=FALSE){
+fit_model <- function (x_raw, y_raw){
    #' Model training function: given training data (X_raw, y_raw), train this
    #' pricing model.
    #'
@@ -118,8 +119,13 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
    #' -------
    #' self: (optional), this instance of the fitted model.
    
-   TRAINING_YEARS <-  c(1,2,3)
+   TRAINING_YEARS <-  c(1,2,3,4)
    VALIDATION_YEARS <- c(4)
+   GRIDSEARCH <- FALSE
+   EVALUATE_MODEL <- TRUE
+   
+   x_raw <- Xdata
+   y_raw <- ydata
    
    x_clean  <- preprocess_X_data(x_raw)
    df <- data.frame(y_raw, x_clean)
@@ -146,17 +152,47 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
          #' @model trained model
          #' @auc Calculated ROC AUC on the validation data.
          
-         df_train_occ <- df_train %>%
-            mutate(occ = claim_amount>0) %>%
-            select(-claim_amount)
+         # Rebalancing the classes for the training set
+         resample <- function(df, strategy=list('under'=0.7, 'over'=1.2)) {
+            
+            random_undersample <- function(df, size){
+               df0 <- df %>% filter(occ == F) %>%
+                  slice_sample(n=size, replace=FALSE)
+               df1 <- df %>% filter(occ == T)
+               return(rbind(df0, df1))
+            }
+            
+            random_oversample <- function(df, size){
+               df0 <- df %>% filter(occ == F) 
+               df1 <- df %>% filter(occ == T) %>%
+                  slice_sample(n=size, replace=TRUE)
+               return(rbind(df0, df1))
+            }
+               
+            dim_classes <- df %>% select(occ) %>% table()
+            dim_classes <- dim_classes * c(strategy$under, strategy$over)
+            
+            df <- random_oversample(df, dim_classes[2])
+            df <- random_undersample(df, dim_classes[1])
+            return(df)
+         }
          
+         
+         df_train_occ <- df_train %>%
+            mutate(occ = factor(claim_amount>0)) %>%
+            select(-claim_amount) %>% 
+            resample()
+            
+         # Preparing a validation dataset
          df_valid_occ <- df_valid %>%
-            mutate(occ = claim_amount>0) %>%
+            mutate(occ = factor(claim_amount>0)) %>%
             select(-claim_amount)
       
          # Defining task and learner for the mlr optimizer
-         train_task <- makeClassifTask(data = df_train_occ, target = "occ")
-         valid_task <- makeClassifTask(data = df_valid_occ, target = "occ")
+         train_task <- makeClassifTask(
+            data = df_train_occ, target = "occ", positive = "FALSE")
+         valid_task <- makeClassifTask(
+            data = df_valid_occ, target = "occ", positive = "FALSE")
          
          learner <- makeLearner("classif.xgboost", predict.type = "prob")
          
@@ -168,8 +204,7 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             learner$par.vals <- list(
                objective = "binary:logistic",
                eval_metric = "auc",
-               nrounds = 200,
-               gamma = 1e-5
+               nrounds = 100
             )
             
             # Set parameter space for gridsearch
@@ -186,7 +221,7 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             )
             
             resampling <- makeResampleDesc("CV", stratify = T, iters = 5L)
-            control <- makeTuneControlRandom(maxit = 10L)
+            control <- makeTuneControlRandom(maxit = 10L, tune.threshold=T)
             
             # Parameter tuning
             mytune <- tuneParams(
@@ -205,23 +240,22 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
          } else {
             # Pretuned parameters :
             # ---------------------
-            #' [Tune] Result: booster=gblinear; max_depth=6;
-            #' min_child_weight=1.02; subsample=0.769; colsample_bytree=0.81;
-            #' lambda=2.93; alpha=1.81; eta=0.295 : 
-            #' @mmce.test.mean=0.1054965
+            #' [Tune] Result: booster=gbtree; max_depth=6; 
+            #' min_child_weight=2.79; subsample=0.749; colsample_bytree=0.584; 
+            #' lambda=3.93; alpha=0.0535; eta=0.469 : 
+            #' @mmce.test.mean=0.1655115
             learner$par.vals <- list(
                objective = "binary:logistic",
                eval_metric = "auc",
-               nrounds = 200,
-               eta = 0.295,
-               gamma = 1e-3,
-               booster = 'gblinear',
-               max_depth = 6,
-               min_child_weight = 1.02,
-               subsample = 0.769,
-               colsample_bytree = 0.81,
-               lambda = 2.93,
-               alpha = 1.81
+               nrounds = 50,
+               eta = 0.1,
+               booster = 'gbtree',
+               max_depth = 3,
+               min_child_weight = 2.79,
+               subsample = 0.749,
+               colsample_bytree = 0.584,
+               lambda = 3.93,
+               alpha = 2
             )
          }
          
@@ -286,7 +320,7 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             learner$par.vals <- list(
                objective = "reg:tweedie",
                eval_metric = "rmse",
-               nrounds = 500,
+               nrounds = 200,
                gamma = 1e-1
             )
             
@@ -331,7 +365,7 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             learner$par.vals <- list(
                objective = "reg:tweedie",
                eval_metric = "rmse",
-               nrounds = 500,
+               nrounds = 200,
                eta = 0.314,
                gamma = 1e-1,
                tweedie_variance_power=1.12,
@@ -353,7 +387,7 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
             claim_predictions <- predict(xgb_model, valid_task)
             # RMSE
             rmse_tweedie <- mlr::performance(claim_predictions, mlr::rmse)
-            print(rmse_tweedie, quote=F)
+            print(rmse_tweedie)
             
             # Calculate measures for adequacy evaluation
             truth <- claim_predictions$data$truth
@@ -382,150 +416,20 @@ fit_model <- function (x_raw=Xdata, y_raw=ydata, GRIDSEARCH=FALSE, EVALUATE_MODE
          return(list("model"=xgb_model))
    }
    
-   # Training aggregated severity model (XGB: squared error)
-   train_xgb_linear_model <- 
-      function(df_train, df_valid, gridsearch=F, evaluate_perf=T){
-         #' Function to train a XGBoost with an objective of type 
-         #' reg:squarederror
-         #' 
-         #' Parameters
-         #' ----------
-         #' @df_train dataframe containing training data
-         #' @df_valid dataframe containing valitation data
-         #' @gridsearch Boolean: Use Gridsearch to optimize hyperparameters ?
-         #' @evaluate_perf Boolean: Use df_valid to calculate RMSE on 
-         #' predictions
-         #' 
-         #' returns
-         #' -------
-         #' @model trained model
-         #' @rmse Calculated rmse on the validation data.
-
-         df_train_loss <- df_train %>%
-            filter(claim_amount>0)
-         
-         df_valid_loss <- df_valid %>%
-            filter(claim_amount>0)
-      
-         # Defining task and learner for the mlr optimizer
-         train_task <- makeRegrTask(
-            data = df_train_loss, 
-            target = "claim_amount")
-         valid_task <- makeRegrTask(
-            data = df_valid_loss, 
-            target = "claim_amount")
-         
-         learner <- makeLearner("regr.xgboost", predict.type = "response")
-         
-         if (gridsearch) {
-            # Set parallel backend
-            parallelStartSocket(cpus = detectCores())
-            
-            # Model fixed parameters
-            learner$par.vals <- list(
-               objective = "reg:squarederror",
-               eval_metric = "rmse",
-               nrounds = 500,
-               gamma = 1e-1
-            )
-            
-            # Set parameter space for gridsearch
-            params <- makeParamSet(
-               makeDiscreteParam("booster", values = c(
-                  'gbtree', 'gblinear', 'dart')),
-               makeIntegerParam("max_depth", lower = 3L, upper = 6L),
-               makeNumericParam("min_child_weight", lower = 1L, upper = 10L),
-               makeNumericParam("subsample", lower = 0.5, upper = 1),
-               makeNumericParam("colsample_bytree", lower = 0.5, upper = 1),
-               makeNumericParam("lambda", lower=1, upper=4),
-               makeNumericParam("alpha", lower=0, upper=3),
-               makeNumericParam('eta', lower=0.1, upper=0.5)
-            )
-            
-            control <- makeTuneControlRandom(maxit = 10L)
-            resampling <- makeResampleDesc("CV", iters = 5L)
-            
-            # Parameter tuning
-            mytune <- tuneParams(
-               learner = learner,
-               task = train_task,
-               resampling = resampling,
-               par.set = params,
-               control = control,
-               show.info = T
-            )
-            parallelStop()
-            
-            # Set hyperparameters
-            learner <- setHyperPars(learner, par.vals = mytune$x)
-            
-         } else {
-            # Pretuned parameters :
-            # ---------------------
-            #' [Tune] Result: booster=gblinear; max_depth=3; min_child_weight=8.68;
-            #' subsample=0.821; colsample_bytree=0.658; lambda=1.06; alpha=0.997;
-            #' eta=0.184 :
-            #' @mse.test.mean=3347515.9823544
-            learner$par.vals <- list(
-               objective = "reg:squarederror",
-               eval_metric = "rmse",
-               nrounds = 500,
-               eta = 0.306,
-               gamma = 1e-1,
-               tweedie_variance_power=1.17,
-               booster='gblinear',
-               max_depth=3,
-               min_child_weight=8.68,
-               subsample=0.821,
-               colsample_bytree=0.658,
-               lambda=1.19,
-               alpha=0.0496
-            )
-         }
-         
-         # Train model
-         xgb_model <- mlr::train(learner = learner, task = train_task)
-         
-         if (evaluate_perf){
-            # Evaluation of performance for the occurrence detection.
-            claim_predictions <- predict(xgb_model, valid_task)
-            #RMSE
-            rmse_lm <- mlr::performance(claim_predictions, mlr::rmse)
-            print(rmse_lm, quote=F)
-            return(list("model"=xgb_model, "rmse"=rmse_lm))
-         }
-         return(list("model"=xgb_model))
-   }
    
-   # Comparison of the results for each severity models
-   if (EVALUATE_MODEL){
-      .tweedie <- train_xgb_tweedie(
-         df_train, df_valid, gridsearch = GRIDSEARCH, evaluate_perf = T)
-      .lm <- train_xgb_linear_model(
-         df_train, df_valid, gridsearch = GRIDSEARCH, evaluate_perf = T)
+   severity_model <- train_xgb_tweedie(df_train,
+                                       df_valid,
+                                       gridsearch = GRIDSEARCH,
+                                       evaluate_perf = EVALUATE_MODEL)$model
+   occ_model <- train_xgb_occurrence(df_train, 
+                                     df_valid, 
+                                     gridsearch = GRIDSEARCH,
+                                     evaluate_perf = EVALUATE_MODEL)$model
 
-      print(list(
-         "xgb.tweedie"=.tweedie$rmse,
-         "xgb.lm"=.lm$rmse
-         ))
-      
-   } else {
-      .tweedie <- train_xgb_tweedie(
-         df_train, df_valid, gridsearch = GRIDSEARCH, evaluate_perf = F)
-   }
-   # The result trained_model is something that you will save in the next
-   # section defining a list and putting the trained models in there
-   severity_model <- .tweedie$model
-   occ_model <- train_xgb_occurrence(
-      df_train, df_test, gridsearch = GRIDSEARCH)$model
-   
    return(list(occurence = occ_model,
                cost = severity_model))
 }
 
-
-trained_models <- fit_model(
-   Xdata, ydata, GRIDSEARCH=TRUE, EVALUATE_MODEL = TRUE)
 
 # Saving the model =============================================================
 save_model <- function(model, output_path="trained_model.RData"){
@@ -553,7 +457,7 @@ load_model <- function(model_path="trained_model.RData"){
 }
 
 
-save_model(trained_models)
+save_model(fit_model(Xdata, ydata))
 model <- load_model('trained_model.RData')
 
 # Predicting the claims ========================================================
@@ -577,26 +481,18 @@ predict_expected_claim <- function(model, x_raw){
    #' @avg_claims: a one-dimensional array of the same length as X_raw, with one
    #'     average claim per contract (in same order). These average claims must be POSITIVE (>0).
    
-   x_clean = preprocess_X_data(x_raw)  # preprocess your data before fitting
+   x_clean = preprocess_X_data(x_raw) %>% select(-year)
    
-   df_occ <- x_clean %>%
-      mutate(occ = claim_amount>0) %>%
-      select(-claim_amount)
-   df_loss <- x_clean %>%
-      filter(claim_amount>0)
-   
-   occ_task <- makeClassifTask(data = df_occ, target = "occ")
-   loss_task <- makeRegrTask(data = df_loss, target = "claim_amount")
-   
-   expected_occ <- predict(model$occurence, newdata = occ_task)$data$response
-   expected_loss <- predict(model$cost, newdata = loss_task)$data$response
+   expected_occ <- predict(model$occurence, newdata = x_clean)$data$prob.TRUE
+   expected_loss <- predict(model$cost, newdata = x_clean)$data$response
    
    expected_claims = expected_occ * expected_loss
-   return(expected_claims)  
+   return(round(expected_claims, 2))  
 }
 
 
-claims <- predict_expected_claim(model, Xdata)
+expected_claims <- predict_expected_claim(model, Xdata)
+sqrt(mean((expected_claims - unlist(ydata))^2))
 
 # Pricing contracts ============================================================
 predict_premium <- function(model, x_raw){
@@ -620,10 +516,9 @@ predict_premium <- function(model, x_raw){
    #'     price per contract (in same order). These prices must be POSITIVE (>0).
    
    expectations <- predict_expected_claim(model, x_raw)
-   x_clean = preprocess_X_data(x_raw)
-   
-   return(expectations * 1.2) # Default: bosst prices by a factor of 2
+   return(expectations * 1.1)
 }
+
 
 prices <- predict_premium(model, Xdata)
 as.matrix(head(prices))

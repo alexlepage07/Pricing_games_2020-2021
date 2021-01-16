@@ -117,6 +117,11 @@ class Preprocess_X_data:
             value = x.vh_speed * x.vh_weight
             )
 
+        x.insert(
+            loc=len(x.columns),
+            column='old_policy_duration',
+            value = x.pol_duration - x.pol_sit_duration
+            )
         # Droping not necessay variables
         #x = x.drop(columns='pol_pay_freq')
         if self.drop_id:
@@ -145,7 +150,7 @@ class Preprocess_X_data:
 
         return self
 
-    def transform(self, x_raw):
+    def transform(self, x_raw, one_hot_c = True):
         # Adding new features
         x_prep = self.add_new_features(x_raw)
 
@@ -159,19 +164,20 @@ class Preprocess_X_data:
 
         # Impute missing values
         x_prep = self.impute_missing_values(x_prep)
+        
+        if one_hot_c:
+            # Binarize columns with only two categories
+            lb = LabelBinarizer()
+            for col in self.cols_to_binarize:
+                x_prep[col] = lb.fit_transform(x_prep[col])
 
-        # Binarize columns with only two categories
-        lb = LabelBinarizer()
-        for col in self.cols_to_binarize:
-            x_prep[col] = lb.fit_transform(x_prep[col])
-
-        # One-Hot-Encode the other categorical columns
-        x_prep = pd.get_dummies(
-            data=x_prep,
-            prefix = self.cols_to_one_hot_encode,
-            columns = self.cols_to_one_hot_encode,
-            drop_first=True,
-            dtype='int8'
-            )
+            # One-Hot-Encode the other categorical columns
+            x_prep = pd.get_dummies(
+                data=x_prep,
+                prefix = self.cols_to_one_hot_encode,
+                columns = self.cols_to_one_hot_encode,
+                drop_first=True,
+                dtype='int8'
+                )
 
         return x_prep 

@@ -116,7 +116,12 @@ class Preprocess_X_data:
             column='potential_force_impact',
             value = x.vh_speed * x.vh_weight
             )
-
+        
+        x.insert(
+            loc=len(x.columns),
+            column='old_policy_duration',
+            value = x.pol_duration - x.pol_sit_duration
+            )
         # Droping not necessay variables
         #x = x.drop(columns='pol_pay_freq')
         if self.drop_id:

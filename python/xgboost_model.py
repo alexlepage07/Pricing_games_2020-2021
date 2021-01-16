@@ -29,32 +29,20 @@ def fit_model(X_raw, y_raw):
     """
     TRAINING_YEARS = [1,2,3]
 
-    xgb_params = {
-        "learning_rate" : [0.05],
-        "n_estimators" : [500],
-        # Definition of the model to train
-        "objective": ["reg:tweedie"],
-        "tweedie_variance_power" : [1.1],
-        "booster" : ['gbtree'],
-        "scale_pos_weight": [10],
-        # Evaluation metric
-        "eval_metric": ["rmse"],
-        # Parameters for gbtree booster
-        'gamma' : [0.1],
-        'lambda':[100],
-        "alpha": [0],
-        "min_child_weight": [10],
-        "max_depth": [8],
-        "colsample_bytree": [0.8],
-        "subsample": [0.8],
-        'tree_method':['gpu_hist'],
-        # Additionnal parameters for the training function
-        "early_stopping_rounds": [50],
-        "num_boost_round": [4000],
-        "subsample" : [0.8],
-        "colsample_bytree" : [0.8],
-        "nthread" : [4]
-    }
+    xgb_params = {'alpha': [1], 
+    'colsample_bytree': [0.75], 
+    'gamma': [0.05], 
+    'lambda': [1], 
+    'learning_rate': [0.012], 
+    'max_depth': [10], 
+    'min_child_weight': [7], 
+    'n_estimators': [1000], 
+    'scale_pos_weight': [1],
+     'subsample': [0.56],
+      'tweedie_variance_power': [1.56],
+      'num_boost_round': [4000],
+       'early_stopping_rounds':[50]
+      }
 
     models_counts = X_raw.vh_make_model.value_counts()
     df = pd.DataFrame(list(zip(models_counts.index, models_counts)), 
@@ -76,11 +64,11 @@ def fit_model(X_raw, y_raw):
     # No more use of the column year
     #x = x.drop(columns='year')
     x = np.array(x)
-    
+
     x_train, x_valid, y_train, y_valid = train_test_split(x, y_raw, 
                                                           test_size=0.33,
                                                           shuffle = True,
-                                                          random_state = 4000
+                                                          random_state = 7603
                                                         )
 
 

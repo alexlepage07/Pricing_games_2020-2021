@@ -23,7 +23,7 @@ def f(para):
     return {'loss': mse, 'status': STATUS_OK}
 
 if __name__ == "__main__":
-    df = pd.read_csv('training.csv')
+    df = pd.read_csv('../training.csv')
     X_raw = df.drop(columns=['claim_amount'])
     y_raw = df['claim_amount']
     
@@ -45,20 +45,20 @@ if __name__ == "__main__":
     x = np.array(x)
     
     space4extree = {
-    'n_estimators': hp.choice('n_estimators', range(20, 1000)),
+    'n_estimators': hp.choice('n_estimators', range(20, 200)),
     'max_depth': hp.choice('max_depth', range(2, 20)),
     'min_samples_split': hp.choice('min_samples_split',range( 2, 10)),
     'min_samples_leaf': hp.choice('min_samples_leaf', range(1, 10)),
     'min_weight_fraction_leaf': hp.uniform('min_weight_fraction_leaf', 0, 0.5),
     'max_features': hp.choice('max_features',['auto', 'sqrt', 'log2']),
-    'ccp_alpha' : hp.uniform('ccp_alpha',1,1000)
+    'ccp_alpha' : hp.uniform('ccp_alpha',1,100)
     }
     
     trials = Trials()
-    best = fmin(f, space4extree, algo=tpe.suggest, max_evals=1000, trials=trials)
+    best = fmin(f, space4extree, algo=tpe.suggest, max_evals=100, trials=trials)
     print('best:')
     print(best)
 
-    with open('extra_trees_best_params.json', 'w') as outfile:
+    with open('extra_trees_best_params.txt', 'w') as outfile:
         json.dump(best, outfile)
 

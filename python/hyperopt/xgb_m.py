@@ -16,12 +16,12 @@ from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 
 def f(para):
-    rmse = model_score(X_train,X_test, y_train,y_test,para)
+    rmse = model_score(X_train, X_test, y_train, y_test, para)
     return {'loss': rmse, 'status': STATUS_OK}
 
 
 if __name__ == "__main__":
-    X_raw = pd.read_csv('training.csv')
+    X_raw = pd.read_csv('../training.csv')
     y_raw = X_raw.pop('claim_amount')
 
     models_counts = X_raw.vh_make_model.value_counts()

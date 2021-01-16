@@ -26,16 +26,16 @@ def f(para):
 
 
 if __name__ == "__main__":
-    X_raw = pd.read_csv('training.csv')
+    X_raw = pd.read_csv('../training.csv')
     y_raw = X_raw.pop('claim_amount')
-    
+
     models_counts = X_raw.vh_make_model.value_counts()
     df = pd.DataFrame(list(zip(models_counts.index, models_counts)), 
-               columns =['vh_make_model', 'model_make_count'])
+                      columns=['vh_make_model', 'model_make_count'])
     
     df['vh_make_model'] = df['vh_make_model'].astype(str)
     preprocessing = Preprocess_X_data(n_occurences_vh_make_model=50,
-                                      drop_id=True, model_c =df)
+                                      drop_id=True, model_c=df)
 
     # Preprocessing
     preprocessing.fit(X_raw)
@@ -48,11 +48,11 @@ if __name__ == "__main__":
     space4extree = {
         'n_estimators': hp.choice('n_estimators', range(20, 1000)),
         'max_depth': hp.choice('max_depth', range(2, 20)),
-        'min_samples_split': hp.choice('min_samples_split',range( 2, 10)),
+        'min_samples_split': hp.choice('min_samples_split', range(2, 10)),
         'min_samples_leaf': hp.choice('min_samples_leaf', range(1, 10)),
         'min_weight_fraction_leaf': hp.uniform('min_weight_fraction_leaf', 0, 0.5),
         'max_features': hp.choice('max_features', ['auto', 'sqrt', 'log2']),
-        'ccp_alpha' : hp.uniform('ccp_alpha', 1, 1000)
+        'ccp_alpha': hp.uniform('ccp_alpha', 1, 1000)
     }
     
     trials = Trials()
@@ -62,4 +62,3 @@ if __name__ == "__main__":
 
     with open('extra_trees_best_params.json', 'w') as outfile:
         json.dump(best, outfile)
-

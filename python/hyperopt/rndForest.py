@@ -26,12 +26,12 @@ def f(para):
 
 
 if __name__ == "__main__":
-    X_raw = pd.read_csv('training.csv')
+    X_raw = pd.read_csv('../training.csv')
     y_raw = X_raw.pop('claim_amount')
 
     models_counts = X_raw.vh_make_model.value_counts()
     df = pd.DataFrame(list(zip(models_counts.index, models_counts)), 
-               columns =['vh_make_model', 'model_make_count'])
+                      columns=['vh_make_model', 'model_make_count'])
     
     df['vh_make_model'] = df['vh_make_model'].astype(str)
     preprocessing = Preprocess_X_data(n_occurences_vh_make_model=50,

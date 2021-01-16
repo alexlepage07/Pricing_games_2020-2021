@@ -12,7 +12,7 @@ import matplotlib.pylab as plt
 from preprocessing import *
 
 
-def model_score(X_train,X_test, y_train,y_test, xgb_params):
+def model_score(X_train, X_test, y_train, y_test, xgb_params):
     """Model training function: given training data (X_raw, y_raw), train this pricing model.
 
     Parameters

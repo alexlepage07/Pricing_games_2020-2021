@@ -132,4 +132,5 @@ dmypy.json
 .Rhistory
 
 .vscode
-.xml
+*.xml
+*.iml

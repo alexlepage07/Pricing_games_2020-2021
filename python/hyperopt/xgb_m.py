@@ -51,9 +51,9 @@ if __name__ == "__main__":
         "n_estimators" : 1000 ,#hp.choice("n_estimators",range(1,1000)),
         # Definition of the model to train
         "objective": "reg:tweedie",
-        "tweedie_variance_power" : hp.uniform("tweedie_variance_power",1,2),
+        "tweedie_variance_power" : hp.uniform("tweedie_variance_power",1.01,1.99),
         "booster" : 'gbtree',
-        "scale_pos_weight": 10 ,#hp.choice("scale_pos_weight",range(1,1000)),
+        "scale_pos_weight": 1 ,#hp.choice("scale_pos_weight",range(1,1000)),
         # Evaluation metric
         "eval_metric": "rmse",
         # Parameters for gbtree booster
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         'lambda': 0,#hp.choice("lambda",range(1,1000)),
         "alpha": 0,#hp.choice("alpha",range(1,1000)),
         "min_child_weight": hp.choice("min_child_weight",range(1,12)),
-        "max_depth": 12,#hp.choice("max_depth",range(1,10)),
+        "max_depth": 10,#hp.choice("max_depth",range(1,10)),
         'tree_method': 'gpu_hist',
         # Additionnal parameters for the training function
         #"colsample_bytree": 0.8,#hp.uniform("colsample_bytree",0.5,0.9),

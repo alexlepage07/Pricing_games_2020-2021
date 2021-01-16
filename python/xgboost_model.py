@@ -37,9 +37,9 @@ def fit_model(X_raw, y_raw):
     'max_depth': [10], 
     'min_child_weight': [7], 
     'n_estimators': [1000], 
-    'scale_pos_weight': [1],
+    'scale_pos_weight': [10],
      'subsample': [0.56],
-      'tweedie_variance_power': [1.56],
+      'tweedie_variance_power': [1.9],
       'num_boost_round': [4000],
        'early_stopping_rounds':[50]
       }
@@ -63,12 +63,13 @@ def fit_model(X_raw, y_raw):
 
     # No more use of the column year
     #x = x.drop(columns='year')
-    x = np.array(x)
+    find_zero= y_raw > 0
 
     x_train, x_valid, y_train, y_valid = train_test_split(x, y_raw, 
                                                           test_size=0.33,
                                                           shuffle = True,
-                                                          random_state = 7603
+                                                          random_state = 4000
+                                                          #stratify = find_zero
                                                         )
 
 

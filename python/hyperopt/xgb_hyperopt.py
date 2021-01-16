@@ -11,6 +11,7 @@ import matplotlib.pylab as plt
 
 from preprocessing import *
 
+
 def model_score(X_train,X_test, y_train,y_test, xgb_params):
     """Model training function: given training data (X_raw, y_raw), train this pricing model.
 
@@ -27,7 +28,6 @@ def model_score(X_train,X_test, y_train,y_test, xgb_params):
         with your prediction methods.
 
     """
-
     # Convert de features dataframes into DMatrix so it can be use to train an 
     # XGBoost
     dmatrix_train = xgb.DMatrix(X_train)
@@ -38,17 +38,16 @@ def model_score(X_train,X_test, y_train,y_test, xgb_params):
     # Transform xgb_params as a list of every combinations of parameters that 
     # needs to be tried during the gridsearch.
 
-
     # Train the XGBoost model
 
     results_dict = {}
     model = xgb.train(
         xgb_params,
-        dtrain = dmatrix_train,
-        num_boost_round = 4000,
-        early_stopping_rounds = 50,
-        evals = [(dmatrix_train, "train"), (dmatrix_valid, "eval")],
-        evals_result = results_dict
+        dtrain=dmatrix_train,
+        num_boost_round=4000,
+        early_stopping_rounds=50,
+        evals=[(dmatrix_train, "train"), (dmatrix_valid, "eval")],
+        evals_result=results_dict
     )
 
     return float(list(results_dict["eval"].values())[0][-1])

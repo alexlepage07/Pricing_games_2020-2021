@@ -11,6 +11,7 @@ from sklearn.model_selection import cross_validate
 from xgboost.sklearn import XGBClassifier
 import matplotlib.pylab as plt
 
+
 class NormalizeData:
     '''
     Class used to normalize a dataset according to a standard normal 
@@ -40,6 +41,7 @@ class NormalizeData:
             if idx in self.x_means.index:
                 x_raw[idx] = (x_raw[idx] - self.x_means[idx]) / self.x_std[idx]
         return x_raw
+
 
 class Compress_vh_make_model:
     '''
@@ -174,4 +176,4 @@ class Preprocess_X_data:
             dtype='int8'
             )
 
-        return x_prep 
+        return x_prep

@@ -27,42 +27,40 @@ def fit_model(X_raw, y_raw):
         with your prediction methods.
 
     """
-    TRAINING_YEARS = [1,2,3]
+    TRAINING_YEARS = [1, 2, 3]
 
     xgb_params = {
-        "learning_rate" : [0.05],
-        "n_estimators" : [500],
+        "learning_rate": [0.05],
+        "n_estimators": [500],
         # Definition of the model to train
         "objective": ["reg:tweedie"],
-        "tweedie_variance_power" : [1.1],
-        "booster" : ['gbtree'],
+        "tweedie_variance_power": [1.1],
+        "booster": ['gbtree'],
         "scale_pos_weight": [10],
         # Evaluation metric
         "eval_metric": ["rmse"],
         # Parameters for gbtree booster
-        'gamma' : [0.1],
-        'lambda':[100],
+        'gamma': [0.1],
+        'lambda': [100],
         "alpha": [0],
         "min_child_weight": [10],
         "max_depth": [8],
         "colsample_bytree": [0.8],
         "subsample": [0.8],
-        'tree_method':['gpu_hist'],
+        'tree_method': ['gpu_hist'],
         # Additionnal parameters for the training function
         "early_stopping_rounds": [50],
         "num_boost_round": [4000],
-        "subsample" : [0.8],
-        "colsample_bytree" : [0.8],
-        "nthread" : [4]
+        "nthread": [4]
     }
 
     models_counts = X_raw.vh_make_model.value_counts()
     df = pd.DataFrame(list(zip(models_counts.index, models_counts)), 
-               columns =['vh_make_model', 'model_make_count'])
+               columns=['vh_make_model', 'model_make_count'])
     
-    df['vh_make_model']=df['vh_make_model'].astype(str)
+    df['vh_make_model'] = df['vh_make_model'].astype(str)
     preprocessing = Preprocess_X_data(n_occurences_vh_make_model=50,
-                                      drop_id=True, model_c =df)
+                                      drop_id=True, model_c=df)
     
     # Split the data in train and validation dataset according to the year
     x = X_raw.copy()
@@ -79,8 +77,8 @@ def fit_model(X_raw, y_raw):
     
     x_train, x_valid, y_train, y_valid = train_test_split(x, y_raw, 
                                                           test_size=0.33,
-                                                          shuffle = True,
-                                                          random_state = 4000
+                                                          shuffle=True,
+                                                          random_state=4000
                                                         )
 
 
@@ -103,11 +101,11 @@ def fit_model(X_raw, y_raw):
         results_dict = {}
         model = xgb.train(
             params_dict,
-            dtrain = dmatrix_train,
-            num_boost_round = params_dict["num_boost_round"],
-            early_stopping_rounds = params_dict["early_stopping_rounds"],
+            dtrain=dmatrix_train,
+            num_boost_round=params_dict["num_boost_round"],
+            early_stopping_rounds=params_dict["early_stopping_rounds"],
             evals = [(dmatrix_train, "train"), (dmatrix_valid, "eval")],
-            evals_result = results_dict
+            evals_result=results_dict
         )
         results_list.append({
             "eval": float(list(results_dict["eval"].values())[0][-1]),
@@ -118,4 +116,4 @@ def fit_model(X_raw, y_raw):
 
     print(results_list)
 
-    return model,results_list
+    return model, results_list

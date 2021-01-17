@@ -54,7 +54,7 @@ def f(para):
     X_train, X_test, y_train, y_test = train_test_split(x, y_raw, 
                                                           test_size=0.33,
                                                           shuffle = True,
-                                                          random_state = para['rnd_st']
+                                                          random_state = 2000
                                                         )
     rmse = Catb_score(X_train,X_test, y_train,y_test,para)
     return {'loss': rmse, 'status': STATUS_OK}
@@ -75,7 +75,6 @@ if __name__ == "__main__":
     # Preprocessing
     preprocessing.fit(X_raw)
     x = preprocessing.transform(X_raw, one_hot_c = False)
-
 
     # No more use of the column year
     #x = x.drop(columns='year')

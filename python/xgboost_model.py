@@ -68,7 +68,7 @@ def fit_model(X_raw, y_raw):
     x_train, x_valid, y_train, y_valid = train_test_split(x, y_raw, 
                                                           test_size=0.33,
                                                           shuffle = True,
-                                                          random_state = 4000
+                                                          random_state = 10007
                                                           #stratify = find_zero
                                                         )
 

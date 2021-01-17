@@ -260,7 +260,9 @@ if __name__ == "__main__":
     l2_valid = x_new.iloc[holdout_idx]
     xgb_m, res = train_xgb(l2_train, l2_valid,y_train, y_test,xgb_final)
     print(res)
-    xgb_m, res = train_xgb(l2_train[['xgb_1_preds','light_gbm_1_preds','catb_1_preds''randomForest_1_preds']], l2_valid,y_train, y_test,xgb_final)
+    xgb_m, res = train_xgb(l2_train[['xgb_1_preds','light_gbm_1_preds','catb_1_preds''randomForest_1_preds']], 
+                            l2_valid[['xgb_1_preds','light_gbm_1_preds','catb_1_preds''randomForest_1_preds']],
+                            y_train, y_test,xgb_final)
     print(res)
     
 

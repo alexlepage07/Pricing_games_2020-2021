@@ -90,7 +90,8 @@ extra_tree_param = {
     'min_samples_leaf': 2,
     'min_weight_fraction_leaf': 0,
     'max_features': 'auto',#['auto', 'sqrt', 'log2']),
-    'ccp_alpha' : 1
+    'ccp_alpha' : 1,
+    'n_jobs':8
     }
 
 xgb_final = {
@@ -144,7 +145,7 @@ if __name__ == "__main__":
 
     holdout_idx = x.sample( frac = 0.1,random_state=0).index
 
-    kf = KFold(n_splits=9, random_state=None, shuffle=True)
+    kf = KFold(n_splits=2, random_state=None, shuffle=True)
 
     train_data = x.iloc[~x.index.isin(holdout_idx)]
 
@@ -169,11 +170,11 @@ if __name__ == "__main__":
             column='randomForest_'+str(1)+'_preds',
             value = 0
             )
-    x_new.insert(
-            loc=len(x.columns),
-            column='extra_tree_'+str(1)+'_preds',
-            value = 0
-            )
+    #x_new.insert(
+    #        loc=len(x.columns),
+    #        column='extra_tree_'+str(1)+'_preds',
+    #        value = 0
+    #        )
 
     i = 1
     split_idx_lst = list()
@@ -194,10 +195,14 @@ if __name__ == "__main__":
         xgb_m, res = train_xgb(X_train, X_test,y_train, y_test,xgb_params)
         x_new.loc[test_index,['xgb_'+str(1)+'_preds']] = predict_xgb(X_test,xgb_m)
         #train light gbm 1
-        d_train = lgb.Dataset(X_cat_train, label=y_train,free_raw_data=False, feature_name='auto', categorical_feature=['pol_coverage','pol_pay_freq',
-                                                                                        'pol_payd','pol_usage','drv_sex1',
-                                                                                        'drv_drv2','vh_make_model','vh_fuel',
-                                                                                        'vh_type','vh_age_NA','vh_value_NA'])
+        d_train = lgb.Dataset(X_cat_train, 
+                            label=y_train,
+                            free_raw_data=False, 
+                            feature_name='auto', 
+                            categorical_feature=['pol_coverage','pol_pay_freq',
+                            'pol_payd','pol_usage','drv_sex1',
+                            'drv_drv2','drv_sex2','vh_make_model','vh_fuel',
+                            'vh_type','vh_age_NA','vh_value_NA'])
         lgb_m = lgb.train(lgb_param, d_train, 100)                                                                       
         x_new.loc[test_index,['light_gbm_'+str(1)+'_preds']] = lgb_m.predict(X_cat_test)
         #train catboost
@@ -207,11 +212,8 @@ if __name__ == "__main__":
         rnd_f_m = RandomForestRegressor(**rnd_f_param).fit(X_train,y_train)
         x_new.loc[test_index,['randomForest_'+str(1)+'_preds']] = rnd_f_m.predict(X_test)
         #train extra tree
-        extra_tree_m = ExtraTreesRegressor(**extra_tree_param).fit(X_train,y_train)
-        x_new.loc[test_index,['extra_tree_'+str(1)+'_preds']] = extra_tree_m.predict(X_test)
-
-
-        lst_eval_rmse.append(float(list(res["eval"].values())[0][-1]))
+        #extra_tree_m = ExtraTreesRegressor(**extra_tree_param).fit(X_train,y_train)
+        #x_new.loc[test_index,['extra_tree_'+str(1)+'_preds']] = extra_tree_m.predict(X_test)
 
         i=1+i
     
@@ -221,7 +223,7 @@ if __name__ == "__main__":
     final_cat_train_set = x_cat.iloc[~x.index.isin(holdout_idx)]
 
     final_test_set = x.iloc[holdout_idx]
-    final_cat_test_set = x.iloc[holdout_idx]
+    final_cat_test_set = x_cat.iloc[holdout_idx]
 
     y_train = y.iloc[~x.index.isin(holdout_idx)]
     y_test = y.iloc[holdout_idx]
@@ -230,10 +232,14 @@ if __name__ == "__main__":
     xgb_m, res = train_xgb(final_train_set, final_test_set,y_train, y_test,xgb_params)
     x_new.loc[holdout_idx,['xgb_'+str(1)+'_preds']] = predict_xgb(final_test_set,xgb_m)
     #train light gbm 1
-    d_train = lgb.Dataset(final_cat_train_set , label=y_train,free_raw_data=False, feature_name='auto', categorical_feature=['pol_coverage','pol_pay_freq',
-                                                                                    'pol_payd','pol_usage','drv_sex1',
-                                                                                    'drv_drv2','vh_make_model','vh_fuel',
-                                                                                    'vh_type','vh_age_NA','vh_value_NA'])
+    d_train = lgb.Dataset(final_cat_train_set,
+                            label=y_train,
+                            free_raw_data=False, 
+                            feature_name='auto', 
+                            categorical_feature=['pol_coverage','pol_pay_freq',
+                                            'pol_payd','pol_usage','drv_sex1',
+                                            'drv_drv2','drv_sex2','vh_make_model','vh_fuel',
+                                            'vh_type','vh_age_NA','vh_value_NA'])
                                                                             
     lgb_m = lgb.train(lgb_param, d_train, 100)                                                                       
     x_new.loc[holdout_idx,['light_gbm_'+str(1)+'_preds']] = lgb_m.predict(final_cat_test_set)
@@ -244,8 +250,8 @@ if __name__ == "__main__":
     rnd_f_m = RandomForestRegressor(**rnd_f_param).fit(final_train_set,y_train)
     x_new.loc[holdout_idx,['randomForest_'+str(1)+'_preds']] = rnd_f_m.predict(final_test_set)
     #train extra tree
-    extra_tree_m = ExtraTreesRegressor(**extra_tree_param).fit(final_train_set,y_train)
-    x_new.loc[holdout_idx,['extra_tree_'+str(1)+'_preds']] = extra_tree_m.predict(final_test_set)
+    #extra_tree_m = ExtraTreesRegressor(**extra_tree_param).fit(final_train_set,y_train)
+    #x_new.loc[holdout_idx,['extra_tree_'+str(1)+'_preds']] = extra_tree_m.predict(final_test_set)
 
     with open('stacking_new_df.pickle', 'wb') as handle:
         pickle.dump(x_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -253,6 +259,8 @@ if __name__ == "__main__":
     l2_train = x_new.iloc[~x.index.isin(holdout_idx)]
     l2_valid = x_new.iloc[holdout_idx]
     xgb_m, res = train_xgb(l2_train, l2_valid,y_train, y_test,xgb_final)
+    print(res)
+    xgb_m, res = train_xgb(l2_train[['xgb_1_preds','light_gbm_1_preds','catb_1_preds''randomForest_1_preds']], l2_valid,y_train, y_test,xgb_final)
     print(res)
     
 

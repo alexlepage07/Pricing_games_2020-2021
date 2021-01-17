@@ -51,4 +51,4 @@ def model_score(X_train,X_test, y_train,y_test, xgb_params):
         evals_result = results_dict
     )
 
-    return float(list(results_dict["eval"].values())[0][-1])
+    return (float(list(results_dict["eval"].values())[0][-1]) + float(list(results_dict["train"].values())[0][-1]))/2 

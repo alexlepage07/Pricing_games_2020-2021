@@ -26,7 +26,7 @@ def f(para):
     return {'loss': rmse, 'status': STATUS_OK}
 
 if __name__ == "__main__":
-    df = pd.read_csv('training.csv')
+    df = pd.read_csv('../training.csv')
     X_raw = df.drop(columns=['claim_amount'])
     y_raw = df['claim_amount']
     
@@ -86,6 +86,6 @@ if __name__ == "__main__":
     best = fmin(f, lgb_params_space, algo=tpe.suggest, max_evals=100, trials=trials)
     print('best:')
     print(best)
-    with open('xgb_best_params.txt', 'w') as outfile:
-        json.dump(best, outfile)
+    with open('lgb_best_params.pickle', 'w') as outfile:
+        pickle.dump(best, outfile)
 

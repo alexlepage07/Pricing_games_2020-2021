@@ -15,11 +15,6 @@ from xgb_hyperopt import *
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 def f(para):
-    X_train, X_test, y_train, y_test = train_test_split(x, y_raw, 
-                                                          test_size=0.33,
-                                                          shuffle = True,
-                                                          random_state = para['rnd_st']
-                                                        )
     rmse = model_score(X_train,X_test, y_train,y_test,para)
     return {'loss': rmse, 'status': STATUS_OK}
 
@@ -48,34 +43,37 @@ if __name__ == "__main__":
 
     xgb_params_space = {
         "learning_rate" : hp.uniform("learning_rate",0.01,0.2),
-        "n_estimators" : 1000 ,#hp.choice("n_estimators",range(1,1000)),
+        "n_estimators" : 500,
         # Definition of the model to train
         "objective": "reg:tweedie",
         "tweedie_variance_power" : hp.uniform("tweedie_variance_power",1.01,1.99),
         "booster" : 'gbtree',
-        "scale_pos_weight": 1 ,#hp.choice("scale_pos_weight",range(1,1000)),
+        "scale_pos_weight": 2,
         # Evaluation metric
         "eval_metric": "rmse",
         # Parameters for gbtree booster
-        'gamma' : 0.1,#hp.uniform("gamma",0,0.4),
-        'lambda': 0,#hp.choice("lambda",range(1,1000)),
-        "alpha": 0,#hp.choice("alpha",range(1,1000)),
+        'gamma' : hp.uniform("gamma",0,0.4),
+        'lambda': 0,
+        "alpha": 0,
         "min_child_weight": hp.choice("min_child_weight",range(1,12)),
-        "max_depth": 10,#hp.choice("max_depth",range(1,10)),
+        "max_depth": hp.choice("max_depth",range(1,10)),
         'tree_method': 'gpu_hist',
         # Additionnal parameters for the training function
-        #"colsample_bytree": 0.8,#hp.uniform("colsample_bytree",0.5,0.9),
-        #"subsample": 0.8,#hp.uniform("subsample",0.5,0.9),
-        'rnd_st':hp.choice('rnd_st',range(1,20000))
+        "colsample_bytree": hp.uniform("colsample_bytree",0.5,0.9),
+        "subsample": hp.uniform("subsample",0.5,0.9)
     }
-    
+    X_train, X_test, y_train, y_test = train_test_split(x, y_raw, 
+                                                          test_size=0.5,
+                                                          shuffle = True,
+                                                          random_state = 501
+                                                        )
     trials = Trials()
     print('Start')
     best = fmin(f, xgb_params_space, algo=tpe.suggest, max_evals=100, trials=trials)
     print('best:')
     print(best)
 
-    with open('xgb_best_params_3.pickle', 'wb') as handle:
+    with open('xgb_best_params_5050_train_eval_501.pickle', 'wb') as handle:
         pickle.dump(best, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 

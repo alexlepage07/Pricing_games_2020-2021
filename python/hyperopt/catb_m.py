@@ -51,11 +51,6 @@ def Catb_score(X_train,X_test, y_train,y_test,para):
 
 
 def f(para):
-    X_train, X_test, y_train, y_test = train_test_split(x, y_raw, 
-                                                          test_size=0.33,
-                                                          shuffle = True,
-                                                          random_state = 2000
-                                                        )
     rmse = Catb_score(X_train,X_test, y_train,y_test,para)
     return {'loss': rmse, 'status': STATUS_OK}
 
@@ -85,7 +80,7 @@ if __name__ == "__main__":
             x[c] = x[c].astype('category')
 
     xgb_params_space = {
-                        'iterations' : hp.choice('iterations',range(10,1000)),
+                        'iterations' : hp.choice('iterations',range(10,500)),
                         'variance_power': hp.uniform('variance_power',1,2), 
                         'depth': hp.choice('depth',range(2,12)), 
                         'learning_rate': hp.uniform('learning_rate',0.001,1),
@@ -93,13 +88,17 @@ if __name__ == "__main__":
                         'od_type': hp.choice('od_type',[None,'IncToDec','Iter']),
                         'l2_leaf_reg': hp.choice('l2_leaf_reg',range(1,1000)),
                         'bagging_temperature':hp.uniform('bagging_temperature',0,1),
-                        'grow_policy':hp.choice('grow_policy',[None,'SymmetricTree','Depthwise','Lossguide']),
-                        'rnd_st':hp.choice('rnd_st',range(1,20000))
+                        'grow_policy':hp.choice('grow_policy',[None,'SymmetricTree','Depthwise','Lossguide'])
     }
-    
+    X_train, X_test, y_train, y_test = train_test_split(x, y_raw, 
+                                                          test_size=0.5,
+                                                          shuffle = True,
+                                                          random_state = 501
+                                                        )
+
     trials = Trials()
     print('Start')
-    best = fmin(f, xgb_params_space, algo=tpe.suggest, max_evals=100, trials=trials)
+    best = fmin(f, xgb_params_space, algo=tpe.suggest, max_evals=100, trials=trials,trials_save_file='catb_best_params.txt')
     print('best:')
     print(best)
 

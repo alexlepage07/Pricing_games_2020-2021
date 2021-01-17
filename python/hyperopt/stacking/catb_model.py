@@ -32,7 +32,7 @@ def Catb_train(X_train,X_test, y_train,y_test,para):
                     'vh_type','vh_age_NA','vh_value_NA'])
 
     # specify the training parameters 
-    model = CatBoostRegressor(para)
+    model = CatBoostRegressor(**para)
     #train the model
     model.fit(train_pool,eval_set=test_pool)
     # make the prediction using the resulting model

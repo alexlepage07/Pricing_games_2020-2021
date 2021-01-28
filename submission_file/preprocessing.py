@@ -1,4 +1,5 @@
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.linear_model import LinearRegression
 import pandas as pd
 
 
@@ -22,7 +23,7 @@ class NormalizeData:
 
     def fit(self, x_train):
         x_float = x_train.select_dtypes(include=['float', 'int']).drop(
-            columns=['year', 'pol_no_claims_discount'])
+            columns=['year', 'pol_no_claims_discount', 'vh_value'])
         self.x_means = x_float.mean()
         self.x_std = x_float.std()
         return self
@@ -77,6 +78,70 @@ class Compress_vh_make_model:
         return x_raw
 
 
+class ImputeVhInformations:
+    '''
+    Imputation class for missing values
+    '''
+    def __init__(self):
+        self.speed_mean = 0
+        self.weight_mean = 0
+        self.age_mean = 0
+        self.vh_value_imputer = LinearRegression()
+
+    def prefit(self, x_train):
+        self.speed_mean = x_train['vh_speed'].mean()
+        self.weight_mean = x_train['vh_weight'].mean()
+        self.age_mean = x_train['vh_age'].mean()
+        return self
+
+    def pretransform(self, x_raw):
+        x = x_raw.copy()
+
+        # Adding missing indicators
+        x['vh_age_NA'] = x['vh_age'].isnull()
+        x['vh_value_NA'] = x['vh_value'].isnull()
+
+        # Impute some of the missings
+        x.loc[x.vh_speed.isnull(), 'vh_speed'] = self.speed_mean
+        x.loc[x.vh_weight.isnull(), 'vh_weight'] = self.weight_mean
+        x.loc[x.vh_age.isnull(), 'vh_age'] = self.age_mean
+
+        return x
+
+    def fit(self, x_train):
+        # Starting to impute speed and weight according to the model mean
+        self.prefit(x_train)
+        x = self.pretransform(x_train)
+
+        # Training a mixed linear regression to impute the vh_value
+        variables = ('vh_fuel', 'vh_age', 'vh_type')
+        vh_columns = x.columns.str.startswith(variables)
+        rows_to_predict = x.vh_value.notnull()
+
+        x_imputation = x.loc[rows_to_predict, vh_columns]
+        x_imputation = x_imputation.drop(columns='vh_age_NA')
+
+        self.vh_value_imputer.fit(x_imputation, x.vh_value[rows_to_predict])
+
+        return self
+
+    def transform(self, x_raw):
+        # Imputing speed and weight according to the model mean
+        x = self.pretransform(x_raw)
+
+        # Predict the missing vh_values
+        variables = ('vh_fuel', 'vh_age', 'vh_type')
+        vh_columns = x.columns.str.startswith(variables)
+        rows_to_predict = x.vh_value.isnull()
+        x_to_predict = x.loc[rows_to_predict, vh_columns].drop(columns='vh_age_NA')
+        x.loc[rows_to_predict, 'vh_value'] = self.vh_value_imputer.predict(x_to_predict)
+
+        # For the other variables, we simply put zeros.
+        x = x.fillna(0)
+
+        return x
+
+
 class Preprocess_X_data:
     """
     Class to preprocess the features of the dataset
@@ -96,6 +161,7 @@ class Preprocess_X_data:
 
     def __init__(self, n_occurences_vh_make_model=30, drop_id=False):
         self.normalizer = NormalizeData()
+        self.imputer = ImputeVhInformations()
         self.compress_models = Compress_vh_make_model(
             n_occurences=n_occurences_vh_make_model
         )
@@ -105,6 +171,7 @@ class Preprocess_X_data:
             'vh_make_model', 'vh_fuel', 'vh_type'
         ]
         self.drop_id = drop_id
+        self.vh_value_mean = 0
 
     def add_new_features(self, x_raw):
         x = x_raw.copy()
@@ -131,16 +198,6 @@ class Preprocess_X_data:
             x = x.drop(columns='id_policy')
         return x
 
-    def impute_missing_values(self, x_raw):
-        x = x_raw.copy()
-        # Adding missing indicators
-        x['vh_age_NA'] = x['vh_age'].isnull()
-        x['vh_value_NA'] = x['vh_value'].isnull()
-
-        # Impute missing values
-        x = x.fillna(0)
-        return x
-
     def fit(self, x_train):
         # Adding new features
         x_train = self.add_new_features(x_train)
@@ -151,6 +208,21 @@ class Preprocess_X_data:
 
         # Normalization
         self.normalizer.fit(x_train)
+        colnames = x_train.columns
+        x_train = self.normalizer.transform(x_train)
+        x_train = pd.DataFrame(x_train, columns=colnames)
+
+        # One-Hot-Encode the categorical columns necessary to imput vh_value
+        x_train = pd.get_dummies(
+            data=x_train,
+            prefix=['vh_type', 'vh_fuel'],
+            columns=['vh_type', 'vh_fuel'],
+            drop_first=True,
+            dtype='int8'
+        )
+
+        # Impute missing vh_values
+        self.imputer.fit(x_train)
 
         return self
 
@@ -166,9 +238,6 @@ class Preprocess_X_data:
         x_prep = self.normalizer.transform(x_prep)
         x_prep = pd.DataFrame(x_prep, columns=colnames)
 
-        # Impute missing values
-        x_prep = self.impute_missing_values(x_prep)
-
         # Binarize columns with only two categories
         lb = LabelBinarizer()
         for col in self.cols_to_binarize:
@@ -182,6 +251,9 @@ class Preprocess_X_data:
             drop_first=True,
             dtype='int8'
         )
+
+        # Impute missing values
+        x_prep = self.imputer.transform(x_prep)
 
         return x_prep
 

@@ -1,16 +1,14 @@
 """In this module, we ask you to define your pricing model, in Python."""
 
-import pickle
-import numpy as np
-import pandas as pd
-import sklearn
 import itertools
+import pickle
+
+import numpy as np
 import xgboost as xgb
-from xgboost.sklearn import XGBClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import cross_validate
 
 from preprocessing import *
+
 
 # TODO: import your modules here.
 # Don't forget to add them to requirements.txt before submitting.
@@ -168,7 +166,22 @@ def predict_premium(model, X_raw, preprocessing):
 	"""
 	expected_claims = predict_expected_claim(model, X_raw, preprocessing)
 
-	return expected_claims * 1.2
+	# Calculate loadings
+	claims_hist_loading = np.exp(0.15 * X_raw.pol_no_claims_discount)
+	pol_duration_loading = np.exp(-X_raw.pol_duration / 10000)
+
+	# Coverage loading
+	loadings = {
+		'Min': 1,
+		'Med1': 1.03,
+		'Med2': 1.06,
+		'Max': 1.09
+	}
+	coverage_loading = np.empty(X_raw.shape[0])
+	for cov, load in loadings.items():
+		coverage_loading += (X_raw.pol_coverage == cov) * load
+
+	return expected_claims * claims_hist_loading * coverage_loading * pol_duration_loading
 
 
 def save_model(model, preprocessing):
